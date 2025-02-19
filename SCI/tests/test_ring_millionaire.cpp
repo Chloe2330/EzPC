@@ -15,11 +15,11 @@ int main(int argc, char **argv) {
     MillionaireProtocol bob(sci::BOB, iopack, otpack);
 
     // Define the values to compare
-    uint64_t alice_value = 5;
-    uint64_t bob_value = 4;
-    
-    uint8_t alice_result = 0;
-    uint8_t bob_result = 0;
+    uint64_t alice_value = 7;
+    uint64_t bob_value = 6;
+
+    uint8_t alice_result;
+    uint8_t bob_result;
 
     // Perform the comparison
     if (party == sci::ALICE) {
@@ -31,19 +31,25 @@ int main(int argc, char **argv) {
     // Synchronize to ensure both parties have completed the protocol
     iopack->io->flush();
 
-    // Output the results
+    // Exchange results between parties for XOR operation (secret sharing)
     if (party == sci::ALICE) {
-        if (alice_result) {
-            std::cout << "Alice's value (" << alice_value << ") is greater than Bob's value (" << bob_value << ")." << std::endl;
-        } else {
-            std::cout << "Alice's value (" << alice_value << ") is NOT greater than Bob's value (" << bob_value << ")." << std::endl;
-        }
+        iopack->io->send_data(&alice_result, sizeof(uint8_t));
+        iopack->io->recv_data(&bob_result, sizeof(uint8_t));
     } else {
-        if (bob_result) {
-            std::cout << "Bob's value (" << bob_value << ") is greater than Alice's value (" << alice_value << ")." << std::endl;
-        } else {
-            std::cout << "Bob's value (" << bob_value << ") is NOT greater than Alice's value (" << alice_value << ")." << std::endl;
-        }
+        iopack->io->recv_data(&alice_result, sizeof(uint8_t));
+        iopack->io->send_data(&bob_result, sizeof(uint8_t));
+    }
+
+    // Output results 
+    uint8_t xor_result;
+    if (party == sci::ALICE) {
+      xor_result = alice_result ^ bob_result;
+      if (xor_result) {
+        std::cout << "Alice > Bob" << std::endl;
+      }
+      else {
+        std::cout << "Bob > Alice" << std::endl;
+      }
     }
 
     // Clean up
