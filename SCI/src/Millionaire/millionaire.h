@@ -26,6 +26,7 @@ SOFTWARE.
 #include "utils/emp-tool.h"
 #include <cmath>
 #include <omp.h>
+#include <chrono>
 
 #define MILL_PARAM 4
 #define WAN_EXEC
@@ -76,15 +77,28 @@ public:
   void compare(uint8_t *res, uint64_t *data, int num_cmps, int bitlength,
                bool greater_than = true, bool equality = false,
                int radix_base = MILL_PARAM) {
+    auto total_start = std::chrono::high_resolution_clock::now();
+
+    auto config_start = std::chrono::high_resolution_clock::now();
     configure(bitlength, radix_base);
+    auto config_end = std::chrono::high_resolution_clock::now();
 
     if (bitlength <= beta) {
       uint8_t N = 1 << bitlength;
       uint8_t mask = N - 1;
       if (party == sci::ALICE) {
+        auto alice_start = std::chrono::high_resolution_clock::now();
+        
+        auto prg_start = std::chrono::high_resolution_clock::now();
         sci::PRG128 prg;
         prg.random_data(res, num_cmps * sizeof(uint8_t));
+        auto prg_end = std::chrono::high_resolution_clock::now();
+
+        auto alloc_start = std::chrono::high_resolution_clock::now();
         uint8_t **leaf_messages = new uint8_t *[num_cmps];
+        auto alloc_end = std::chrono::high_resolution_clock::now();
+
+        auto loop_start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < num_cmps; i++) {
           res[i] &= 1;
           leaf_messages[i] = new uint8_t[N];
@@ -96,28 +110,76 @@ public:
             }
           }
         }
+        auto loop_end = std::chrono::high_resolution_clock::now();
+
+        auto ot_start = std::chrono::high_resolution_clock::now();
         if (bitlength > 1) {
           otpack->kkot[bitlength - 1]->send(leaf_messages, num_cmps, 1);
         } else {
           otpack->iknp_straight->send(leaf_messages, num_cmps, 1);
         }
+        auto ot_end = std::chrono::high_resolution_clock::now();
 
+        auto cleanup_start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < num_cmps; i++)
           delete[] leaf_messages[i];
         delete[] leaf_messages;
+        auto cleanup_end = std::chrono::high_resolution_clock::now();
+
+        auto alice_end = std::chrono::high_resolution_clock::now();
+
+        std::cout << "ALICE TIMING:" << std::endl;
+        std::cout << "  ALICE - PRG generation: " << std::chrono::duration_cast<std::chrono::microseconds>(prg_end - prg_start).count() << " us" << std::endl;
+        std::cout << "  ALICE - Memory allocation: " << std::chrono::duration_cast<std::chrono::microseconds>(alloc_end - alloc_start).count() << " us" << std::endl;
+        std::cout << "  ALICE - Comparison loops: " << std::chrono::duration_cast<std::chrono::microseconds>(loop_end - loop_start).count() << " us" << std::endl;
+        std::cout << "  ALICE - OT protocol: " << std::chrono::duration_cast<std::chrono::microseconds>(ot_end - ot_start).count() << " us" << std::endl;
+        std::cout << "  ALICE - Cleanup: " << std::chrono::duration_cast<std::chrono::microseconds>(cleanup_end - cleanup_start).count() << " us" << std::endl;
+        std::cout << "  Total Alice time: " << std::chrono::duration_cast<std::chrono::microseconds>(alice_end - alice_start).count() << " us" << std::endl;
       } else { // party == BOB
+        auto bob_start = std::chrono::high_resolution_clock::now();
+
+        auto alloc_start = std::chrono::high_resolution_clock::now();
         uint8_t *choice = new uint8_t[num_cmps];
+        auto alloc_end = std::chrono::high_resolution_clock::now();
+
+        auto loop_start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < num_cmps; i++) {
           choice[i] = data[i] & mask;
         }
+        auto loop_end = std::chrono::high_resolution_clock::now();
+
+        auto ot_start = std::chrono::high_resolution_clock::now();
         if (bitlength > 1) {
           otpack->kkot[bitlength - 1]->recv(res, choice, num_cmps, 1);
         } else {
           otpack->iknp_straight->recv(res, choice, num_cmps, 1);
         }
+        auto ot_end = std::chrono::high_resolution_clock::now();
 
+        auto cleanup_start = std::chrono::high_resolution_clock::now();
         delete[] choice;
+        auto cleanup_end = std::chrono::high_resolution_clock::now();
+
+        auto bob_end = std::chrono::high_resolution_clock::now();
+
+        // Print Bob's timing results
+        std::cout << "BOB TIMING:" << std::endl;
+        std::cout << " BOB - Memory allocation: " << std::chrono::duration_cast<std::chrono::microseconds>(alloc_end - alloc_start).count() << " us" << std::endl;
+        std::cout << "  BOB - Mask operation loop: " << std::chrono::duration_cast<std::chrono::microseconds>(loop_end - loop_start).count() << " us" << std::endl;
+        std::cout << "  BOB - OT protocol: " << std::chrono::duration_cast<std::chrono::microseconds>(ot_end - ot_start).count() << " us" << std::endl;
+        std::cout << "  BOB - Cleanup: " << std::chrono::duration_cast<std::chrono::microseconds>(cleanup_end - cleanup_start).count() << " us" << std::endl;
+        std::cout << "  Total Bob time: " << std::chrono::duration_cast<std::chrono::microseconds>(bob_end - bob_start).count() << " us" << std::endl;
       }
+      auto total_end = std::chrono::high_resolution_clock::now();
+
+      if (party == sci::ALICE) {
+        std::cout << "ALICE - Total comparison time: " << std::chrono::duration_cast<std::chrono::microseconds>(total_end - total_start).count() << " us" << std::endl;
+      }
+      else {
+        std::cout << "BOB - Total comparison time: " << std::chrono::duration_cast<std::chrono::microseconds>(total_end - total_start).count() << " us" << std::endl;
+      }
+      // std::cout << "Configuration time: " << std::chrono::duration_cast<std::chrono::microseconds>(config_end - config_start).count() << " us" << std::endl;
+
       return;
     }
 
