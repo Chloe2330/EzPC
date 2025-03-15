@@ -15,17 +15,17 @@ int main(int argc, char **argv) {
     MillionaireProtocol bob(sci::BOB, iopack, otpack);
 
     // Define the values to compare
-    uint64_t alice_value = 7;
-    uint64_t bob_value = 6;
+    uint64_t alice_value = 123456789123456789;
+    uint64_t bob_value = 123456789123456788;
 
     uint8_t alice_result;
     uint8_t bob_result;
 
     // Perform the comparison
     if (party == sci::ALICE) {
-        alice.compare(&alice_result, &alice_value, 1, 4);
+        alice.compare(&alice_result, &alice_value, 16, 64);
     } else {
-        bob.compare(&bob_result, &bob_value, 1, 4);
+        bob.compare(&bob_result, &bob_value, 16, 64);
     }
 
     // Synchronize to ensure both parties have completed the protocol
